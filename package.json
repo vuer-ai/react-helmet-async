@@ -1,6 +1,6 @@
 {
   "name": "@vuer-ai/react-helmet-async",
-  "version": "2.0.6",
+  "version": "2.0.7",
   "description": "Thread-safe Helmet for React 16+ and friends",
   "sideEffects": false,
   "main": "./lib/index.esm.js",
@@ -56,7 +56,7 @@
     "test-watch": "yarn test --watch",
     "test-update": "yarn test -u",
     "compile": "yarn run clean && NODE_ENV=production tsx build.ts && yarn types",
-    "prepare": "yarn compile && husky install",
+    "prepare-disabled": "yarn compile && husky install",
     "types": "tsc src/index.tsx --jsx react --declaration --esModuleInterop --allowJs --emitDeclarationOnly --outDir lib --skipLibCheck"
   }
 }

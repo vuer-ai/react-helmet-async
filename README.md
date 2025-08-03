@@ -1,60 +1,71 @@
 # react-helmet-async
 
-[![CircleCI](https://circleci.com/gh/vuer-ai/react-helmet-async.svg?style=svg)](https://circleci.com/gh/vuer-ai/react-helmet-async)
+A thread-safe Helmet for React 16+ that supports modern React features and server-side rendering.
 
-[Announcement post on Times Open blog](https://open.nytimes.com/the-future-of-meta-tag-management-for-modern-react-development-ec26a7dc9183)
+## Why react-helmet-async?
 
-This package is a fork of [React Helmet](https://github.com/nfl/react-helmet).
-`<Helmet>` usage is synonymous, but server and client now requires `<HelmetProvider>` to encapsulate state per request.
+React Helmet is a fantastic library for managing your app's `<head>` tags from within your React component tree. However, the original `react-helmet` has thread safety issues with server-side rendering when using asynchronous operations.
 
-`react-helmet` relies on `react-side-effect`, which is not thread-safe. If you are doing anything asynchronous on the server, you need Helmet to encapsulate data on a per-request basis, this package does just that.
+This package solves those problems by:
 
-## Usage
+- **Thread-safe SSR**: Each request gets its own isolated context, preventing data leaks between concurrent requests
+- **Modern React support**: Built for React 16+ with support up to React 19
+- **Async-friendly**: Works seamlessly with Apollo GraphQL, data fetching, and other asynchronous operations
+- **Familiar API**: Drop-in replacement with minimal changes required
 
-**New is 1.0.0:** No more default export! `import { Helmet } from 'react-helmet-async'`
+Originally created by The New York Times to solve production issues with meta tag management in high-traffic environments.
 
-The main way that this package differs from `react-helmet` is that it requires using a Provider to encapsulate Helmet state for your React tree. If you use libraries like Redux or Apollo, you are already familiar with this paradigm:
+## Installation
 
-```javascript
+```bash
+npm install @vuer-ai/react-helmet-async
+# or
+yarn add @vuer-ai/react-helmet-async
+# or
+pnpm add @vuer-ai/react-helmet-async
+```
+
+## Quick Start
+
+### Client-side Usage
+
+```jsx
 import React from 'react';
 import ReactDOM from 'react-dom';
-import { Helmet, HelmetProvider } from 'react-helmet-async';
+import { Helmet, HelmetProvider } from '@vuer-ai/react-helmet-async';
 
-const app = (
+const App = () => (
   <HelmetProvider>
-    <App>
+    <div>
       <Helmet>
-        <title>Hello World</title>
-        <link rel="canonical" href="https://www.tacobell.com/" />
+        <title>My App</title>
+        <meta name="description" content="My awesome React app" />
+        <link rel="canonical" href="https://example.com/" />
       </Helmet>
       <h1>Hello World</h1>
-    </App>
+    </div>
   </HelmetProvider>
 );
 
-ReactDOM.hydrate(
-  app,
-  document.getElementById(‘app’)
-);
+ReactDOM.render(<App />, document.getElementById('root'));
 ```
 
-On the server, we will no longer use static methods to extract state. `react-side-effect`
-exposed a `.rewind()` method, which Helmet used when calling `Helmet.renderStatic()`. Instead, we are going
-to pass a `context` prop to `HelmetProvider`, which will hold our state specific to each request.
+### Server-side Usage
 
-```javascript
+```jsx
 import React from 'react';
 import { renderToString } from 'react-dom/server';
-import { Helmet, HelmetProvider } from 'react-helmet-async';
+import { Helmet, HelmetProvider } from '@vuer-ai/react-helmet-async';
 
+// Create a fresh context for each request
 const helmetContext = {};
 
 const app = (
   <HelmetProvider context={helmetContext}>
     <App>
       <Helmet>
-        <title>Hello World</title>
-        <link rel="canonical" href="https://www.tacobell.com/" />
+        <title>Server-rendered App</title>
+        <meta name="description" content="Thread-safe meta tags" />
       </Helmet>
       <h1>Hello World</h1>
     </App>
@@ -62,143 +73,90 @@ const app = (
 );
 
 const html = renderToString(app);
-
 const { helmet } = helmetContext;
 
-// helmet.title.toString() etc…
+// Use helmet data in your HTML template
+const htmlTemplate = `
+<!DOCTYPE html>
+<html ${helmet.htmlAttributes.toString()}>
+<head>
+  ${helmet.title.toString()}
+  ${helmet.meta.toString()}
+  ${helmet.link.toString()}
+</head>
+<body ${helmet.bodyAttributes.toString()}>
+  <div id="root">${html}</div>
+</body>
+</html>
+`;
 ```
 
-## Streams
+## Key Features
 
-This package only works with streaming if your `<head>` data is output outside of `renderToNodeStream()`.
-This is possible if your data hydration method already parses your React tree. Example:
+### Thread-Safe Server Rendering
 
-```javascript
-import through from 'through';
-import { renderToNodeStream } from 'react-dom/server';
-import { getDataFromTree } from 'react-apollo';
-import { Helmet, HelmetProvider } from 'react-helmet-async';
-import template from 'server/template';
+Unlike the original `react-helmet`, this library properly isolates state per request, preventing the common issue where concurrent server requests would corrupt each other's meta tags.
 
-const helmetContext = {};
+### SEO Tag Prioritization
 
-const app = (
-  <HelmetProvider context={helmetContext}>
-    <App>
-      <Helmet>
-        <title>Hello World</title>
-        <link rel="canonical" href="https://www.tacobell.com/" />
-      </Helmet>
-      <h1>Hello World</h1>
-    </App>
-  </HelmetProvider>
-);
+Prioritize important SEO tags in the `<head>`:
 
-await getDataFromTree(app);
-
-const [header, footer] = template({
-  helmet: helmetContext.helmet,
-});
-
-res.status(200);
-res.write(header);
-renderToNodeStream(app)
-  .pipe(
-    through(
-      function write(data) {
-        this.queue(data);
-      },
-      function end() {
-        this.queue(footer);
-        this.queue(null);
-      }
-    )
-  )
-  .pipe(res);
-```
-
-## Usage in Jest
-While testing in using jest, if there is a need to emulate SSR, the following string is required to have the test behave the way they are expected to.
-
-```javascript
-import { HelmetProvider } from 'react-helmet-async';
-
-HelmetProvider.canUseDOM = false;
-```
-
-## Prioritizing tags for SEO
-
-It is understood that in some cases for SEO, certain tags should appear earlier in the HEAD. Using the `prioritizeSeoTags` flag on any `<Helmet>` component allows the server render of react-helmet-async to expose a method for prioritizing relevant SEO tags.
-
-In the component:
-```javascript
+```jsx
 <Helmet prioritizeSeoTags>
-  <title>A fancy webpage</title>
-  <link rel="notImportant" href="https://www.chipotle.com" />
-  <meta name="whatever" value="notImportant" />
-  <link rel="canonical" href="https://www.tacobell.com" />
-  <meta property="og:title" content="A very important title"/>
+  <title>Important Title</title>
+  <meta property="og:title" content="Social Media Title" />
+  <link rel="canonical" href="https://example.com" />
+  <meta name="description" content="Page description" />
 </Helmet>
 ```
 
-In your server template:
+### Works with Modern Data Fetching
 
-```javascript
-<html>
-  <head>
-    ${helmet.title.toString()}
-    ${helmet.priority.toString()}
-    ${helmet.meta.toString()}
-    ${helmet.link.toString()}
-    ${helmet.script.toString()}
-  </head>
-  ...
-</html>
-```
+Perfect for use with Apollo GraphQL, Relay, or any async data fetching:
 
-Will result in:
+```jsx
+import { getDataFromTree } from '@apollo/client/react/ssr';
 
-```html
-<html>
-  <head>
-    <title>A fancy webpage</title>
-    <meta property="og:title" content="A very important title"/>
-    <link rel="canonical" href="https://www.tacobell.com" />
-    <meta name="whatever" value="notImportant" />
-    <link rel="notImportant" href="https://www.chipotle.com" />
-  </head>
-  ...
-</html>
-```
-
-A list of prioritized tags and attributes can be found in [constants.ts](./src/constants.ts).
-
-## Usage without Context
-You can optionally use `<Helmet>` outside a context by manually creating a stateful `HelmetData` instance, and passing that stateful object to each `<Helmet>` instance:
-
-
-```js
-import React from 'react';
-import { renderToString } from 'react-dom/server';
-import { Helmet, HelmetProvider, HelmetData } from 'react-helmet-async';
-
-const helmetData = new HelmetData({});
-
+const helmetContext = {};
 const app = (
-    <App>
-      <Helmet helmetData={helmetData}>
-        <title>Hello World</title>
-        <link rel="canonical" href="https://www.tacobell.com/" />
-      </Helmet>
-      <h1>Hello World</h1>
-    </App>
+  <ApolloProvider client={client}>
+    <HelmetProvider context={helmetContext}>
+      <App />
+    </HelmetProvider>
+  </ApolloProvider>
 );
 
+await getDataFromTree(app);
 const html = renderToString(app);
-
-const { helmet } = helmetData.context;
+const { helmet } = helmetContext;
 ```
+
+## API
+
+The API is nearly identical to the original `react-helmet`, with the key difference being the required `<HelmetProvider>` wrapper:
+
+- `<HelmetProvider>` - Provides context for Helmet instances
+- `<Helmet>` - Manages head tags (same API as original)
+- All the same tag types: `title`, `meta`, `link`, `script`, `style`, `base`, `noscript`
+- All the same attributes and props
+
+## React Version Support
+
+This library supports:
+- React 16.6+
+- React 17.x
+- React 18.x  
+- React 19.x
+
+## Migration from react-helmet
+
+1. Install `@vuer-ai/react-helmet-async`
+2. Replace imports: `react-helmet` → `@vuer-ai/react-helmet-async`
+3. Wrap your app with `<HelmetProvider>`
+4. Update server-side rendering to use context instead of static methods
+
+That's it! The rest of your `<Helmet>` components work exactly the same.
 
 ## License
 
-Licensed under the Apache 2.0 License, Copyright © 2018 Scott Taylor
+Licensed under the Apache 2.0 License
