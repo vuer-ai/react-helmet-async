@@ -57,6 +57,6 @@
     "test-update": "yarn test -u",
     "compile": "yarn run clean && NODE_ENV=production tsx build.ts && yarn types",
     "prepare": "yarn compile && husky install",
-    "types": "tsc src/index.tsx --jsx react --declaration --esModuleInterop --allowJs --emitDeclarationOnly --outDir lib"
+    "types": "tsc src/index.tsx --jsx react --declaration --esModuleInterop --allowJs --emitDeclarationOnly --outDir lib --skipLibCheck"
   }
 }
